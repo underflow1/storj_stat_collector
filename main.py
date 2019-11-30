@@ -56,6 +56,7 @@ if True:
 
 # Инициализация переменных, подключения к базам данных и прочие проверки
 if True:
+    # разворачиваем дефолтный конфиг
     appFolderName = os.path.join(sys.path[0])
     print(appFolderName)
     configFileName = 'collector.conf'
@@ -71,6 +72,7 @@ if True:
     config = configparser.ConfigParser()
     config.read(configPath)
 
+    # проверяем наличие sqlite баз ноды и открыаем на чтение
     sqliteDbPath = config.get('stuff', 'sqliteDbPath')
 
     if os.path.exists(sqliteDbPath) == False:
@@ -84,7 +86,6 @@ if True:
         sys.exit('ОШИБКА: Файл bandwidth.db не существует: ' + dbPathBW )
 
     dbExternalConfig = dict(config.items('database'))
-    
 
     dbConnectionNode = sqlite3.connect(dbPathBW, uri=True)
     if dbConnectionNode:
@@ -92,27 +93,41 @@ if True:
     else: 
         sys.exit('ОШИБКА: Подключение к базе данных ноды не удалось')
 
+    # устанавливаем подключение к главной базе данных
     dbConnectionMain =  pymysql.connect(**dbExternalConfig)
     if dbConnectionMain:
         cursorMain = dbConnectionMain.cursor()
     else: 
         sys.exit('ОШИБКА: Подключение к главной базе данных не удалось')
 
+    # получаем данные от ноды по API
+    satellites = []
+    satellitesStats = {}
     try:
-        response = requests.get(config.get('stuff', 'api')+ 'dashboard')
+        response  = requests.get(config.get('stuff', 'api')+ 'dashboard')
+
+        nodeId = json.loads(response.text)['data']['nodeID']
+
+        for item in json.loads(response.text)['data']['satellites']:
+            satellites.append(item['id'])
+
+        for nodeSatellite in satellites:
+            satellitesStats[nodeSatellite] = {}
+            satellitesStats[nodeSatellite]['audit'] = json.loads(requests.get(config.get('stuff', 'api')+ 'satellite/' + nodeSatellite).text)['data']['audit']
+            satellitesStats[nodeSatellite]['uptime'] = json.loads(requests.get(config.get('stuff', 'api')+ 'satellite/' + nodeSatellite).text)['data']['uptime']
     except Exception as e:
         sys.exit('ОШИБКА: API ноды недоступен')
 
-    nodeId = json.loads(response.text)['data']['nodeID']
-
+    # получаем имя ноды (из имени хоста :) )
     f = open('/etc/hostname', 'r')
     nodeName = f.read().strip().replace("node-", '')
     f.close()
 
+    # получаем последнюю дату из главной базы данных
     lastDate = getLastDate(nodeId)
 
 # Собственно сам код
-if True:
+if False:
     if lastDate:
         print('Последняя дата в главной базе данных: ', lastDate)
         removeLastData(nodeId, lastDate)
