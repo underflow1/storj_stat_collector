@@ -1,0 +1,9 @@
+[database]
+host = remotemysql.com
+database = zkomw3Ecik
+user = zkomw3Ecik
+password = Sev0GmHQMW
+
+[stuff]
+api=http://localhost:14002/api/
+sqliteDbPath=/mnt/storage/storage
