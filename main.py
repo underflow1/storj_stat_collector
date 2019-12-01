@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 version = "7.0.1"
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import configparser
 import shutil
@@ -54,6 +54,19 @@ if True:
         else:
             return True
 
+    def pretty_time_delta(seconds): # преобразовать секунды в понятное время
+        seconds = int(seconds)
+        days, seconds = divmod(seconds, 86400)
+        hours, seconds = divmod(seconds, 3600)
+        minutes, seconds = divmod(seconds, 60)
+        if days > 0:
+            return '%dd%dh%dm%ds' % (days, hours, minutes, seconds)
+        elif hours > 0:
+            return '%dh%dm%ds' % (hours, minutes, seconds)
+        elif minutes > 0:
+            return '%dm%ds' % (minutes, seconds)
+        else:
+            return '%ds' % (seconds,)
 # Инициализация переменных, подключения к базам данных и прочие проверки
 if True:
     # разворачиваем дефолтный конфиг
@@ -105,13 +118,13 @@ if True:
     nodeSatellitesList = []
     nodeSatellitesStats = {}
     try:
-        response  = requests.get(config.get('stuff', 'api')+ 'dashboard')
+        nodeDashboadData  = requests.get(config.get('stuff', 'api')+ 'dashboard').text
     except Exception as e:
         sys.exit('ОШИБКА: API ноды недоступен')
 
-    nodeId = json.loads(response.text)['data']['nodeID']
+    nodeId = json.loads(nodeDashboadData)['data']['nodeID']
     
-    for item in json.loads(response.text)['data']['satellites']:
+    for item in json.loads(nodeDashboadData)['data']['satellites']:
         nodeSatellitesList.append(item['id'])
 
     try:
@@ -131,6 +144,13 @@ if True:
 # Собственно сам код
 if True:
     # Обновление статистики от API
+    dashboardData = {}
+    dashboardData['version'] = json.loads(nodeDashboadData)['data']['version']
+    dashboardData['upToDate'] = json.loads(nodeDashboadData)['data']['upToDate']
+    dashboardData['uptime'] = pretty_time_delta((datetime.strptime(json.loads(nodeDashboadData)['data']['startedAt'].split('.')[0], '%Y-%m-%dT%H:%M:%S') - datetime.now()).seconds)
+
+    print(dashboardData)
+    
     query = "SELECT nodeId FROM statistics WHERE nodeId = %s"
     try:
         cursorMain.execute(query, nodeId)
@@ -138,18 +158,24 @@ if True:
     except Exception as e:
         sys.exit("ОШИБКА: Что-то пошло не так при проверке сущестовования ноды в базе данных", e)    
 
-    args = {'nodeId': nodeId, 'nodeName': nodeName, 'data': json.dumps(nodeSatellitesStats)}
+    args = {'nodeId': nodeId, 'nodeName': nodeName, 'data': json.dumps(nodeSatellitesStats), 'dashboardData': json.dumps(dashboardData)}
     if not nodeExists:
-        query = "INSERT INTO statistics (nodeId, nodeName, data) VALUES (%(nodeId)s, %(nodeName)s, %(data)s)"
+        query = "INSERT INTO statistics (nodeId, nodeName, data, dashboardData) VALUES (%(nodeId)s, %(nodeName)s, %(data)s, %(dashboardData)s)"
     else:
-        query = "UPDATE statistics SET data = %(data)s, nodeName = %(nodeName)s WHERE nodeId = %(nodeId)s"    
+        query = "UPDATE statistics SET data = %(data)s, nodeName = %(nodeName)s, dashboardData = %(dashboardData)s WHERE nodeId = %(nodeId)s"    
     try:
         cursorMain.execute(query, args)    
     except Exception as e:
         sys.exit("ОШИБКА: Что-то пошло не так при обновлении данных api", e)    
 
+    
+
+
+
+
+
     # Обновление (добавление) данных bandwidth
-    if config.getboolean('stuff', 'sqliteDbProcessing'):
+    if not config.getboolean('stuff', 'sqliteDbProcessing'):
         lastDate = getLastDate(nodeId)
         if lastDate:
             print('Последняя дата в главной базе данных: ', lastDate)
@@ -213,6 +239,8 @@ if True:
             cursorMain.execute("UPDATE statistics SET lastDate = %(newLastDate)s WHERE nodeId = %(nodeId)s", args)
         except Exception as e:
             sys.exit("ОШИБКА: Что-то пошло не так при обновлении последней даты", e)
+
+
 
     dbConnectionMain.commit()
 
