@@ -138,11 +138,11 @@ if True:
     except Exception as e:
         sys.exit("ОШИБКА: Что-то пошло не так при проверке сущестовования ноды в базе данных", e)    
 
-    args = {'nodeId': nodeId, 'data': json.dumps(nodeSatellitesStats)}
+    args = {'nodeId': nodeId, 'nodeName': nodeName, 'data': json.dumps(nodeSatellitesStats)}
     if not nodeExists:
-        query = "INSERT INTO statistics (nodeId, data) VALUES (%(nodeId)s, %(data)s)"
+        query = "INSERT INTO statistics (nodeId, nodeName, data) VALUES (%(nodeId)s, %(nodeName)s, %(data)s)"
     else:
-        query = "UPDATE statistics SET data = %(data)s WHERE nodeId = %(nodeId)s"    
+        query = "UPDATE statistics SET data = %(data)s, nodeName = %(nodeName)s WHERE nodeId = %(nodeId)s"    
     try:
         cursorMain.execute(query, args)    
     except Exception as e:
