@@ -33,11 +33,11 @@ if True:
         
     def getLastDate(node_id): # возвращает последнюю дату сохраненую в главной базе данных
         args = (node_id)
-        query = ''' SELECT MAX(date) FROM bandwidth WHERE nodeId = %s '''
+        query = ''' SELECT lastDate FROM statistics WHERE nodeId = %s '''
         cursorMain.execute(query,args)
-        result = cursorMain.fetchone()[0]
+        result = cursorMain.fetchone()
         if result:
-            return result
+            return result[0]
         else: 
             return False
 
@@ -48,7 +48,7 @@ if True:
             cursorMain.execute(query,args)
             rowsAffected = cursorMain.rowcount
             dbConnectionMain.commit()
-            print('Удалено ', rowsAffected, 'строк.' )
+            print('Удалено', rowsAffected, 'строк данных bandwidth за дату', last_date )
         except Exception as e:
             sys.exit('Не удалось удалить последние данные', e)
         else:
@@ -72,114 +72,149 @@ if True:
     config = configparser.ConfigParser()
     config.read(configPath)
 
+    if config.getboolean('stuff', 'sqliteDbProcessing'):
     # проверяем наличие sqlite баз ноды и открыаем на чтение
-    sqliteDbPath = config.get('stuff', 'sqliteDbPath')
+        sqliteDbPath = config.get('stuff', 'sqliteDbPath')
 
-    if os.path.exists(sqliteDbPath) == False:
-        sys.exit('ОШИБКА: Путь не существует: ' + sqliteDbPath)
+        if os.path.exists(sqliteDbPath) == False:
+            sys.exit('ОШИБКА: Путь не существует: ' + sqliteDbPath)
 
-    if os.path.isfile(os.path.join(sqliteDbPath,"bandwidth.db")) == True:
-        dbPath = sqliteDbPath
-        dbPathBW = os.path.join(dbPath,"bandwidth.db")
-        dbPathBW = 'file:' + dbPathBW + '?mode=ro'
-    else:
-        sys.exit('ОШИБКА: Файл bandwidth.db не существует: ' + dbPathBW )
+        if os.path.isfile(os.path.join(sqliteDbPath,"bandwidth.db")) == True:
+            dbPath = sqliteDbPath
+            dbPathBW = os.path.join(dbPath,"bandwidth.db")
+            dbPathBW = 'file:' + dbPathBW + '?mode=ro'
+        else:
+            sys.exit('ОШИБКА: Файл bandwidth.db не существует: ' + dbPathBW )
 
-    dbExternalConfig = dict(config.items('database'))
-
-    dbConnectionNode = sqlite3.connect(dbPathBW, uri=True)
-    if dbConnectionNode:
-        cursorNode = dbConnectionNode.cursor()
-    else: 
-        sys.exit('ОШИБКА: Подключение к базе данных ноды не удалось')
-
+        dbConnectionNode = sqlite3.connect(dbPathBW, uri=True)
+        if dbConnectionNode:
+            cursorNode = dbConnectionNode.cursor()
+        else: 
+            sys.exit('ОШИБКА: Подключение к базе данных ноды не удалось')
+    
     # устанавливаем подключение к главной базе данных
-    dbConnectionMain =  pymysql.connect(**dbExternalConfig)
+    mainDbConfig = dict(config.items('database'))
+
+    dbConnectionMain =  pymysql.connect(**mainDbConfig)
     if dbConnectionMain:
         cursorMain = dbConnectionMain.cursor()
     else: 
         sys.exit('ОШИБКА: Подключение к главной базе данных не удалось')
 
     # получаем данные от ноды по API
-    satellites = []
-    satellitesStats = {}
+    nodeSatellitesList = []
+    nodeSatellitesStats = {}
     try:
         response  = requests.get(config.get('stuff', 'api')+ 'dashboard')
-
-        nodeId = json.loads(response.text)['data']['nodeID']
-
-        for item in json.loads(response.text)['data']['satellites']:
-            satellites.append(item['id'])
-
-        for nodeSatellite in satellites:
-            satellitesStats[nodeSatellite] = {}
-            satellitesStats[nodeSatellite]['audit'] = json.loads(requests.get(config.get('stuff', 'api')+ 'satellite/' + nodeSatellite).text)['data']['audit']
-            satellitesStats[nodeSatellite]['uptime'] = json.loads(requests.get(config.get('stuff', 'api')+ 'satellite/' + nodeSatellite).text)['data']['uptime']
     except Exception as e:
         sys.exit('ОШИБКА: API ноды недоступен')
+
+    nodeId = json.loads(response.text)['data']['nodeID']
+    
+    for item in json.loads(response.text)['data']['satellites']:
+        nodeSatellitesList.append(item['id'])
+
+    try:
+        for nodeSatellite in nodeSatellitesList:
+            nodeSatellitesStats[nodeSatellite] = {}
+            nodeSatellitesStats[nodeSatellite]['audit'] = json.loads(requests.get(config.get('stuff', 'api')+ 'satellite/' + nodeSatellite).text)['data']['audit']
+            nodeSatellitesStats[nodeSatellite]['uptime'] = json.loads(requests.get(config.get('stuff', 'api')+ 'satellite/' + nodeSatellite).text)['data']['uptime']
+    except Exception as e:
+        sys.exit('ОШИБКА: Что-то пошло не так при получении данных сателлита ', nodeSatellite, ' от API ноды')
 
     # получаем имя ноды (из имени хоста :) )
     f = open('/etc/hostname', 'r')
     nodeName = f.read().strip().replace("node-", '')
     f.close()
 
-    # получаем последнюю дату из главной базы данных
-    lastDate = getLastDate(nodeId)
 
 # Собственно сам код
-if False:
-    if lastDate:
-        print('Последняя дата в главной базе данных: ', lastDate)
-        removeLastData(nodeId, lastDate)
+if True:
+    # Обновление статистики от API
+    query = "SELECT nodeId FROM statistics WHERE nodeId = %s"
+    try:
+        cursorMain.execute(query, nodeId)
+        nodeExists = cursorMain.fetchone()
+    except Exception as e:
+        sys.exit("ОШИБКА: Что-то пошло не так при проверке сущестовования ноды в базе данных", e)    
+
+    args = {'nodeId': nodeId, 'data': json.dumps(nodeSatellitesStats)}
+    if not nodeExists:
+        query = "INSERT INTO statistics (nodeId, data) VALUES (%(nodeId)s, %(data)s)"
     else:
-        lastDate = datetime(2019,1,1).strftime("%Y-%m-%d")
-        print('В главной базе данных нет информации')
-    
-    args = {'nodeId': nodeId, 'nodeName': nodeName, 'lastDate': lastDate }
+        query = "UPDATE statistics SET data = %(data)s WHERE nodeId = %(nodeId)s"    
+    try:
+        cursorMain.execute(query, args)    
+    except Exception as e:
+        sys.exit("ОШИБКА: Что-то пошло не так при обновлении данных api", e)    
 
-    queryRepeatingPart = '''
-            hex(satellite_id) AS satelliteId,
-            CASE hex(satellite_id)
-                WHEN 'A28B4F04E10BAE85D67F4C6CB82BF8D4C0F0F47A8EA72627524DEB6EC0000000' THEN 'us-central-1'
-                WHEN 'AF2C42003EFC826AB4361F73F9D890942146FE0EBE806786F8E7190800000000' THEN 'europe-west-1'
-                WHEN '84A74C2CD43C5BA76535E1F42F5DF7C287ED68D33522782F4AFABFDB40000000' THEN 'asia-east-1'
-                WHEN '004AE89E970E703DF42BA4AB1416A3B30B7E1D8E14AA0E558F7EE26800000000' THEN 'stefan-benten'
-                ELSE '-UNKNOWN-'
-            END satelliteName,
-            action,
-            CASE action
-                WHEN 1 THEN 'Ingress'
-                WHEN 2 THEN 'Egress'
-                WHEN 3 THEN 'Egress Audit'
-                WHEN 4 THEN 'Egress Repair'
-                WHEN 5 THEN 'Ingress Repair'
-            END actionName,        
-            amount '''
-
-    query = '''
-            SELECT
-            :nodeId, :nodeName, date, month, satelliteId, satelliteName, action, actionName, SUM(amount)
-            FROM (
-                SELECT :nodeId, :nodeName, date(created_at) AS date, strftime('%m', created_at) AS month,''' + queryRepeatingPart + ''' FROM bandwidth_usage 
-            UNION 
-                SELECT :nodeId, :nodeName, date(interval_start) AS date, strftime('%m', interval_start) AS month,''' + queryRepeatingPart + ''' FROM bandwidth_usage_rollups)
-            WHERE date >= :lastDate
-            GROUP BY date, satelliteName, actionName
-            ORDER BY date, action, actionName ASC
-    '''
-
-    data = dbConnectionNode.execute(query, args).fetchall()
-    dbConnectionNode.close()
-    
-    rowsAffected = 0
-    for row in data:
-        try:
-            cursorMain.execute("INSERT INTO bandwidth VALUES (Null, %s,%s,%s,%s,%s,%s,%s,%s,%s);", row)
-        except Exception as e:
-            print("ОШИБКА: Что-то произошло при вставке", e)
+    # Обновление (добавление) данных bandwidth
+    if config.getboolean('stuff', 'sqliteDbProcessing'):
+        lastDate = getLastDate(nodeId)
+        if lastDate:
+            print('Последняя дата в главной базе данных: ', lastDate)
+            removeLastData(nodeId, lastDate)
         else:
-           rowsAffected = rowsAffected + cursorMain.rowcount
+            lastDate = datetime(2019,1,1).strftime("%Y-%m-%d")
+            print('В главной базе данных нет информации')
+        
+        args = {'nodeId': nodeId, 'nodeName': nodeName, 'lastDate': lastDate }
+
+        queryRepeatingPart = '''
+                hex(satellite_id) AS satelliteId,
+                CASE hex(satellite_id)
+                    WHEN 'A28B4F04E10BAE85D67F4C6CB82BF8D4C0F0F47A8EA72627524DEB6EC0000000' THEN 'us-central-1'
+                    WHEN 'AF2C42003EFC826AB4361F73F9D890942146FE0EBE806786F8E7190800000000' THEN 'europe-west-1'
+                    WHEN '84A74C2CD43C5BA76535E1F42F5DF7C287ED68D33522782F4AFABFDB40000000' THEN 'asia-east-1'
+                    WHEN '004AE89E970E703DF42BA4AB1416A3B30B7E1D8E14AA0E558F7EE26800000000' THEN 'stefan-benten'
+                    ELSE '-UNKNOWN-'
+                END satelliteName,
+                action,
+                CASE action
+                    WHEN 1 THEN 'Ingress'
+                    WHEN 2 THEN 'Egress'
+                    WHEN 3 THEN 'Egress Audit'
+                    WHEN 4 THEN 'Egress Repair'
+                    WHEN 5 THEN 'Ingress Repair'
+                END actionName,        
+                amount '''
+
+        query = '''
+                SELECT
+                :nodeId, :nodeName, date, month, satelliteId, satelliteName, action, actionName, SUM(amount)
+                FROM (
+                    SELECT :nodeId, :nodeName, date(created_at) AS date, strftime('%m', created_at) AS month,''' + queryRepeatingPart + ''' FROM bandwidth_usage 
+                UNION 
+                    SELECT :nodeId, :nodeName, date(interval_start) AS date, strftime('%m', interval_start) AS month,''' + queryRepeatingPart + ''' FROM bandwidth_usage_rollups)
+                WHERE date >= :lastDate
+                GROUP BY date, satelliteName, actionName
+                ORDER BY date, action, actionName ASC
+        '''
+
+        bandwidthData = dbConnectionNode.execute(query, args).fetchall()
+
+        query = " SELECT MAX(date(created_at)) FROM bandwidth_usage "
+        newLastDate = dbConnectionNode.execute(query).fetchone()[0]
+
+        dbConnectionNode.close()
+        
+        bandwidthRowsInserted = 0
+        for row in bandwidthData:
+            try:
+                cursorMain.execute("INSERT INTO bandwidth VALUES (Null, %s,%s,%s,%s,%s,%s,%s,%s,%s);", row)
+            except Exception as e:
+                print("ОШИБКА: Что-то пошло не так при вставке данных bandwith", e)
+            else:
+                bandwidthRowsInserted = bandwidthRowsInserted + cursorMain.rowcount
+        print('Записано', bandwidthRowsInserted, 'строк данных bandwidth.')
+        
+        try:
+            args = {'nodeId': nodeId, 'newLastDate': newLastDate}
+            cursorMain.execute("UPDATE statistics SET lastDate = %(newLastDate)s WHERE nodeId = %(nodeId)s", args)
+        except Exception as e:
+            sys.exit("ОШИБКА: Что-то пошло не так при обновлении последней даты", e)
+
     dbConnectionMain.commit()
+
     dbConnectionMain.close()
 
-    print('Записано ', rowsAffected, 'строк.')
