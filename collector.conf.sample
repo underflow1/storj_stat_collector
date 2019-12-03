@@ -6,6 +6,12 @@ password = Sev0GmHQMW
 
 [stuff]
 api=http://localhost:14002/api/
+
+# параметр sqliteDbProcessing используйте только если вы понимаете что вы делаете и зачем вам это нужно.
+# говорят что могут повредится базы данных, но я в это не верю.
+# не говорите потом что я вас не предупреждал!
+sqliteDbProcessing = True
 sqliteDbPath=/mnt/storage/storage
+
 
 
