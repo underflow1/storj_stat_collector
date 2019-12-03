@@ -67,6 +67,7 @@ if True:
             return '%dm%ds' % (minutes, seconds)
         else:
             return '%ds' % (seconds,)
+
 # Инициализация переменных, подключения к базам данных и прочие проверки
 if True:
     # разворачиваем дефолтный конфиг
@@ -115,42 +116,38 @@ if True:
         sys.exit('ОШИБКА: Подключение к главной базе данных не удалось')
 
     # получаем данные от ноды по API
-    nodeSatellitesList = []
-    nodeSatellitesStats = {}
+    nodeApiSatelliteDetails = {}
+    str = '{}'
+    nodeApiData = json.loads(str)
+    nodeApiData['satellite'] = []
     try:
-        nodeDashboadData  = requests.get(config.get('stuff', 'api')+ 'dashboard').text
+        nodeApiData['dashboard'] = json.loads(requests.get(config.get('stuff', 'api')+ 'dashboard').text)
+        nodeApiData['satellites'] = json.loads(requests.get(config.get('stuff', 'api')+ 'dashboard').text)
+        for satellite in nodeApiData['dashboard']['data']['satellites']:
+            satelliteDetail = json.loads(requests.get(config.get('stuff', 'api')+ 'satellite/' + satellite['id']).text)
+            del satelliteDetail['data']['storageDaily'] # отрезаем ненужную тягомотину 
+            del satelliteDetail['data']['bandwidthDaily'] # чтобы не тягать ненужную фигню постоянно
+            nodeApiData['satellite'].append({satellite['id']: satelliteDetail['data']})
     except Exception as e:
         sys.exit('ОШИБКА: API ноды недоступен')
 
-    nodeId = json.loads(nodeDashboadData)['data']['nodeID']
-    
-    for item in json.loads(nodeDashboadData)['data']['satellites']:
-        nodeSatellitesList.append(item['id'])
-
-    try:
-        for nodeSatellite in nodeSatellitesList:
-            nodeSatellitesStats[nodeSatellite] = {}
-            nodeSatellitesStats[nodeSatellite]['audit'] = json.loads(requests.get(config.get('stuff', 'api')+ 'satellite/' + nodeSatellite).text)['data']['audit']
-            nodeSatellitesStats[nodeSatellite]['uptime'] = json.loads(requests.get(config.get('stuff', 'api')+ 'satellite/' + nodeSatellite).text)['data']['uptime']
-    except Exception as e:
-        sys.exit('ОШИБКА: Что-то пошло не так при получении данных сателлита ', nodeSatellite, ' от API ноды')
+    nodeId = nodeApiData['dashboard']['data']['nodeID']
 
     # получаем имя ноды (из имени хоста :) )
     f = open('/etc/hostname', 'r')
     nodeName = f.read().strip().replace("node-", '')
     f.close()
 
-
 # Собственно сам код
 if True:
-    # Обновление статистики от API
-    dashboardData = {}
-    dashboardData['version'] = json.loads(nodeDashboadData)['data']['version']
-    dashboardData['upToDate'] = json.loads(nodeDashboadData)['data']['upToDate']
-    dashboardData['uptime'] = pretty_time_delta((datetime.strptime(json.loads(nodeDashboadData)['data']['startedAt'].split('.')[0], '%Y-%m-%dT%H:%M:%S') - datetime.now()).seconds)
 
-    print(dashboardData)
-    
+    # Обновление статистики от API
+    #dashboardData = {}
+    #dashboardData['version'] = json.loads(nodeApiDashboadData)['data']['version']
+    #dashboardData['upToDate'] = json.loads(nodeApiDashboadData)['data']['upToDate']
+    #dashboardData['uptime'] = pretty_time_delta((datetime.strptime(json.loads(nodeApiDashboadData)['data']['startedAt'].split('.')[0], '%Y-%m-%dT%H:%M:%S') - datetime.now()).seconds)
+
+    # проверка на наличие строки со статистикой ноды и создание новой в случае отсутствия таковой
     query = "SELECT nodeId FROM statistics WHERE nodeId = %s"
     try:
         cursorMain.execute(query, nodeId)
@@ -158,11 +155,11 @@ if True:
     except Exception as e:
         sys.exit("ОШИБКА: Что-то пошло не так при проверке сущестовования ноды в базе данных", e)    
 
-    args = {'nodeId': nodeId, 'nodeName': nodeName, 'data': json.dumps(nodeSatellitesStats), 'dashboardData': json.dumps(dashboardData)}
+    args = {'nodeId': nodeId, 'nodeName': nodeName, 'nodeApiData': json.dumps(nodeApiData)}
     if not nodeExists:
-        query = "INSERT INTO statistics (nodeId, nodeName, data, dashboardData) VALUES (%(nodeId)s, %(nodeName)s, %(data)s, %(dashboardData)s)"
+        query = "INSERT INTO statistics (nodeId, nodeName, nodeApiData) VALUES (%(nodeId)s, %(nodeName)s, %(nodeApiData)s)"
     else:
-        query = "UPDATE statistics SET data = %(data)s, nodeName = %(nodeName)s, dashboardData = %(dashboardData)s WHERE nodeId = %(nodeId)s"    
+        query = "UPDATE statistics SET nodeName = %(nodeName)s, nodeApiData = %(nodeApiData)s WHERE nodeId = %(nodeId)s"    
     try:
         cursorMain.execute(query, args)    
     except Exception as e:
