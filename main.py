@@ -160,7 +160,7 @@ if True:
         sys.exit("ОШИБКА: Что-то пошло не так при обновлении данных api", e)    
 
     # Обновление (добавление) данных bandwidth
-    if not config.getboolean('stuff', 'sqliteDbProcessing'):
+    if config.getboolean('stuff', 'sqliteDbProcessing'):
         lastDate = getLastDate(nodeId)
         if lastDate:
             print('Последняя дата в главной базе данных: ', lastDate)
