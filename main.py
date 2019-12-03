@@ -125,9 +125,9 @@ if True:
         nodeApiData['satellites'] = json.loads(requests.get(config.get('stuff', 'api')+ 'dashboard').text)
         for satellite in nodeApiData['dashboard']['data']['satellites']:
             satelliteDetail = json.loads(requests.get(config.get('stuff', 'api')+ 'satellite/' + satellite['id']).text)
-            del satelliteDetail['data']['storageDaily'] # отрезаем ненужную тягомотину 
-            del satelliteDetail['data']['bandwidthDaily'] # чтобы не тягать ненужную фигню постоянно
-            nodeApiData['satellite'].append({satellite['id']: satelliteDetail['data']})
+            #del satelliteDetail['data']['storageDaily'] # отрезаем ненужную тягомотину 
+            #del satelliteDetail['data']['bandwidthDaily'] # чтобы не тягать ненужную фигню постоянно
+            nodeApiData['satellite'].append({'id': satellite['id'], 'data': satelliteDetail['data']})
     except Exception as e:
         sys.exit('ОШИБКА: API ноды недоступен')
 
@@ -140,12 +140,6 @@ if True:
 
 # Собственно сам код
 if True:
-
-    # Обновление статистики от API
-    #dashboardData = {}
-    #dashboardData['version'] = json.loads(nodeApiDashboadData)['data']['version']
-    #dashboardData['upToDate'] = json.loads(nodeApiDashboadData)['data']['upToDate']
-    #dashboardData['uptime'] = pretty_time_delta((datetime.strptime(json.loads(nodeApiDashboadData)['data']['startedAt'].split('.')[0], '%Y-%m-%dT%H:%M:%S') - datetime.now()).seconds)
 
     # проверка на наличие строки со статистикой ноды и создание новой в случае отсутствия таковой
     query = "SELECT nodeId FROM statistics WHERE nodeId = %s"
@@ -164,12 +158,6 @@ if True:
         cursorMain.execute(query, args)    
     except Exception as e:
         sys.exit("ОШИБКА: Что-то пошло не так при обновлении данных api", e)    
-
-    
-
-
-
-
 
     # Обновление (добавление) данных bandwidth
     if not config.getboolean('stuff', 'sqliteDbProcessing'):
