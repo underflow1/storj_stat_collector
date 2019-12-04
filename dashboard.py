@@ -10,18 +10,18 @@ def formatSize(size):
     "Formats size to be displayed in the most fitting unit"
     power = math.floor((len(str(abs(int(size))))-1)/3)
     units = {
-            0: " B",
-            1: "KB",
-            2: "MB",
-            3: "GB",
-            4: "TB",
-            5: "PB",
-            6: "EB",
-            7: "ZB",
-            8: "YB"
+            0: "b",
+            1: "Kb",
+            2: "Mb",
+            3: "Gb",
+            4: "Tb",
+            5: "Pb",
+            6: "Eb",
+            7: "Zb",
+            8: "Yb"
         }
     unit = units.get(power)
-    sizeForm = size / (1000.00**power)
+    sizeForm = size / (1024.00**power)
     return "{:.2f}{}".format(sizeForm, unit)
     
 def pretty_time_delta(seconds): # преобразовать секунды в понятное время
@@ -46,16 +46,9 @@ config.read('collector.conf')
 # устанавливаем подключение к главной базе данных
 mainDbConfig = dict(config.items('database'))
 
-try:
-    con =  pymysql.connect(**mainDbConfig)
-    cursor = con.cursor(pymysql.cursors.DictCursor)
-except Exception as e:
-    print(e)
-    sys.exit('ОШИБКА: Подключение к главной базе данных не удалось')
 
-query = "SELECT nodeId, nodeName, nodeApiData FROM statistics"
-cursor.execute(query)
-result = cursor.fetchall()
+
+
 
 #dashboardData['uptime'] = pretty_time_delta((datetime.strptime(json.loads(nodeApiDashboadData)['data']['startedAt'].split('.')[0], '%Y-%m-%dT%H:%M:%S') - datetime.now()).seconds)
 
@@ -63,6 +56,17 @@ result = cursor.fetchall()
 
 @app.route("/dashboard")
 def hello():
+    try:
+        con =  pymysql.connect(**mainDbConfig)
+        cursor = con.cursor(pymysql.cursors.DictCursor)
+    except Exception as e:
+        print(e)
+        sys.exit('ОШИБКА: Подключение к главной базе данных не удалось')    
+    query = "SELECT nodeId, nodeName, nodeApiData FROM statistics"
+    cursor.execute(query)
+    result = cursor.fetchall()
+    con.close()
+
     dashboardData = []
     for record in result:
         dashboardRow = {}
