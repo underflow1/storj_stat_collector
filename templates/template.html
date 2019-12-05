@@ -58,18 +58,16 @@
           </table>
           <div class="container">
             <div class="row">
-                <div class="col-6 col-sm-1"><strong>Storage:</strong></div>
-                <div class="col-6 col-sm- text-primary"><strong>Available {{dashboardSummaryData.diskSpaceAvailableTotal}}; 
-                   Used {{dashboardSummaryData.diskSpaceUsedTotal}}; 
-                   Free {{dashboardSummaryData.diskSpaceFreeTotal}}</strong>
-                  </div>
+                <div class="col-6 col-sm-8 text-info">
+                  Available&nbsp{{dashboardSummaryData.diskSpaceAvailableTotal}}; 
+                  Used&nbsp{{dashboardSummaryData.diskSpaceUsedTotal}};  
+                  Free&nbsp{{dashboardSummaryData.diskSpaceFreeTotal}}</div>
               <!-- Заставит следующие столбцы переходить на новую строку -->
               <div class="w-100"></div>
-            
-              <div class="col-6 col-sm-1"><strong>Traffic:</strong> </div>
-              <div class="col-6 col-sm-5 text-warning"><strong> Egress {{dashboardSummaryData.egressTotal}}; 
-                  Ingress {{dashboardSummaryData.ingressTotal}}; 
-                  Delete {{dashboardSummaryData.deleteTotal}}</strong>
+              <div class="col-6 col-sm-8 text-info">
+                Egress&nbsp{{dashboardSummaryData.egressTotal}}; 
+                Ingress&nbsp{{dashboardSummaryData.ingressTotal}}; 
+                Delete&nbsp{{dashboardSummaryData.deleteTotal}}
               </div>
             </div>
           </div>
