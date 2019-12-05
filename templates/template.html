@@ -56,6 +56,23 @@
                      
             </tbody>
           </table>
+          <div class="container">
+            <div class="row">
+                <div class="col-6 col-sm-1"><strong>Storage:</strong></div>
+                <div class="col-6 col-sm-5 text-primary"><strong>Available {{dashboardSummaryData.diskSpaceAvailableTotal}}; 
+                   Used {{dashboardSummaryData.diskSpaceUsedTotal}}; 
+                   Free {{dashboardSummaryData.diskSpaceFreeTotal}}</strong>
+                  </div>
+              <!-- Заставит следующие столбцы переходить на новую строку -->
+              <div class="w-100"></div>
+            
+              <div class="col-6 col-sm-1"><strong>Traffic:</strong> </div>
+              <div class="col-6 col-sm-5 text-warning"><strong> Egress {{dashboardSummaryData.egressTotal}}; 
+                  Ingress {{dashboardSummaryData.ingressTotal}}; 
+                  Delete {{dashboardSummaryData.deleteTotal}}</strong>
+              </div>
+            </div>
+          </div>
 
 
 

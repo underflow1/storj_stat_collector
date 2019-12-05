@@ -67,7 +67,14 @@ def hello():
     result = cursor.fetchall()
     con.close()
 
+    dashboardSummaryData = {}
     dashboardData = []
+    egressTotal = 0
+    ingressTotal = 0
+    deleteTotal = 0
+    diskSpaceUsedTotal = 0
+    diskSpaceAvailableTotal = 0
+    diskSpaceFreeTotal = 0
     for record in result:
         dashboardRow = {}
         
@@ -76,23 +83,50 @@ def hello():
         dashboardRow['nodeName'] = record['nodeName']
         dashboardRow['version'] = apiData['dashboard']['data']['version']
         dashboardRow['uptodate'] = apiData['dashboard']['data']['upToDate']
-        dashboardRow['diskSpaceAvailable'] = formatSize(apiData['dashboard']['data']['diskSpace']['available'])
-        dashboardRow['diskSpaceUsed'] = formatSize(apiData['dashboard']['data']['diskSpace']['used'])
-        dashboardRow['diskSpaceFree'] = formatSize(apiData['dashboard']['data']['diskSpace']['available'] - apiData['dashboard']['data']['diskSpace']['used'])
-        dashboardRow['diskSpaceUsedPercent'] = str(round(apiData['dashboard']['data']['diskSpace']['used'] / apiData['dashboard']['data']['diskSpace']['available']*100)) + '%'
+        
+        diskSpaceAvailable = apiData['dashboard']['data']['diskSpace']['available']
+        diskSpaceUsed = apiData['dashboard']['data']['diskSpace']['used']
+        diskSpaceFree = diskSpaceAvailable - diskSpaceUsed
+        diskSpaceUsedPercent = round((diskSpaceUsed / diskSpaceAvailable)*100)
+
+        dashboardRow['diskSpaceAvailable'] = formatSize(diskSpaceAvailable)
+        dashboardRow['diskSpaceUsed'] = formatSize(diskSpaceUsed)
+        dashboardRow['diskSpaceFree'] = formatSize(diskSpaceFree)
+        dashboardRow['diskSpaceUsedPercent'] = str(diskSpaceUsedPercent) + '%'
+
         egress = 0
         ingress = 0
+        delete = 0
         for satelliteItem in apiData['satellite']:
             for bandwidthDailyItem in satelliteItem['data']['bandwidthDaily']:
-                egress = egress + bandwidthDailyItem['egress']['usage']
-                ingress = ingress + bandwidthDailyItem['ingress']['usage']
+                egress += bandwidthDailyItem['egress']['usage']
+                ingress += bandwidthDailyItem['ingress']['usage']
+                delete += bandwidthDailyItem['delete']
         dashboardRow['egress'] = formatSize(egress)
         dashboardRow['ingress'] = formatSize(ingress)    
-        dashboardRow['uptime'] = pretty_time_delta((datetime.now() - datetime.strptime(apiData['dashboard']['data']['startedAt'].split('.')[0], '%Y-%m-%dT%H:%M:%S')).seconds)
+        startedAt = datetime.strptime(apiData['dashboard']['data']['startedAt'].split('.')[0], '%Y-%m-%dT%H:%M:%S')
+        rightNow = datetime.now()
+        delta = rightNow - startedAt
+
+        dashboardRow['uptime'] = pretty_time_delta(delta.days*86400 + delta.seconds)
         dashboardData.append(dashboardRow)
 
-    print(dashboardRow)
-    return render_template('template.html', dashboardData = dashboardData)
+        egressTotal += egress
+        ingressTotal += ingress
+        deleteTotal += delete
+        diskSpaceUsedTotal += diskSpaceUsed
+        diskSpaceAvailableTotal += diskSpaceAvailable
+        diskSpaceFreeTotal += diskSpaceFree
+    dashboardSummaryData['egressTotal'] = formatSize(egressTotal)
+    dashboardSummaryData['ingressTotal'] = formatSize(ingressTotal)
+    dashboardSummaryData['deleteTotal'] = formatSize(deleteTotal)
+    dashboardSummaryData['diskSpaceUsedTotal'] = formatSize(diskSpaceUsedTotal)
+    dashboardSummaryData['diskSpaceAvailableTotal'] = formatSize(diskSpaceAvailableTotal)
+    dashboardSummaryData['diskSpaceFreeTotal'] = formatSize(diskSpaceFreeTotal)
+
+
+    print(dashboardSummaryData)
+    return render_template('template.html', dashboardData = dashboardData, dashboardSummaryData = dashboardSummaryData)
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0')
